@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xplorebd"
+version = "0.1.0"
+description = "XploreBD is an MCP-compatible extension that provides access to biological data through standardized tools. It integrates APIs such as Ensembl, NCBI, GEO, and ClinVar to enable gene annotation, variant analysis, gene–disease associations, RNA expression queries, and more—making it easy for LLMs to explore biomedical information in a structured and reproducible way."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Shrihari Kamalan Kumaraguruparan", email = "kkshrihari@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "requests>=2.25.0",
+    "anyio",
+    "python-dotenv",
+    "httpx",
+    "httpx-sse",
+    "pydantic",
+    "pydantic-settings",
+    "jsonschema",
+    "sse-starlette",
+    "starlette",
+    "uvicorn",
+    "websockets",
+    "rich",
+    "typer>=0.9,<0.16",
+    "attrs==23.2.0",
+    "rpds-py>=0.27.1",
+    "mcp",
+    "pywin32; sys_platform == 'win32'"
+]
+
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "flake8>=3.8",
+    "mypy>=0.800",
+]
+
+[project.scripts]
+xplorebd = "xplorebd.main:main"
+
+[project.urls]
+Homepage = "https://github.com/kkShrihari/Xplore-BD"
+Repository = "https://github.com/kkShrihari/Xplore-BD"
+Documentation = "https://github.com/kkShrihari/Xplore-BD#readme"
+Issues = "https://github.com/kkShrihari/Xplore-BD/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["xplorebd*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=xplorebd --cov-report=term-missing"
