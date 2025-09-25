@@ -24,132 +24,181 @@ By wrapping existing APIs into capability-based tools (e.g., `gene annotate`, `g
 
 ## 📦 Installation
 
-Create and activate an environment (example with Python 3.11):
+You can install XploreBD in different ways depending on your workflow.  
 
-bash
-```
-sudo apt update
-sudo apt install python3.11 python3.11-venv python3.11-dev
+### Option 1: Using pip + requirements.txt (recommended for development)
 
+```bash
 python3.11 -m venv Xplore-env
 source Xplore-env/bin/activate
 pip install --upgrade pip
-```
-Install dependencies:
-```
-pip install -e .
 pip install -r requirements.txt
 ```
 
-Or install from PyPI (when available):
+### Option 2: Using pyproject.toml (PEP 621 build system)
+
+```bash
+pip install -e .
 ```
-pip install xplorebd
+
+This uses the dependencies and metadata defined in `pyproject.toml`.  
+
+### Option 3: Using Conda environment (alternative)
+
+```bash
+conda create -n xplorebd python=3.11
+conda activate xplorebd
+pip install -r requirements.txt
 ```
-🚀 Usage
-CLI Help
+
+---
+
+## 🚀 Usage
+
+### CLI Help
+
+```bash
 python -m xplorebd --help
+```
 
-📚 Literature
+---
 
-Search publications across PubMed, bioRxiv, medRxiv, ORCID:
+## 📚 Literature
 
+Search publications across **PubMed, bioRxiv, medRxiv, ORCID**:
+
+```bash
 python -m xplorebd literature -k "CRISPR gene editing" -c 5
+```
 
-🧬 Gene Annotation
+---
+
+## 🧬 Gene Annotation
+
+```bash
 python -m xplorebd gene annotate BRCA1 --source ensembl
+```
 
-📊 Gene Expression
+---
+
+## 📊 Gene Expression
+
+```bash
 python -m xplorebd gene expression TP53 --organism human
+```
 
-🧬 Gene Variants
+---
 
-Default usage (ClinVar JSON):
+## 🧬 Gene Variants
 
+**Default usage (ClinVar JSON):**
+```bash
 python -m xplorebd gene variants TP53
+```
 
-
-ClinVar as table:
-
+**ClinVar as table:**
+```bash
 python -m xplorebd gene variants TP53 --table
+```
 
-
-Explicit ClinVar JSON:
-
+**Explicit ClinVar JSON:**
+```bash
 python -m xplorebd gene variants TP53 --source clinvar
+```
 
-
-Explicit ClinVar table:
-
+**Explicit ClinVar table:**
+```bash
 python -m xplorebd gene variants TP53 --source clinvar --table
+```
 
-
-Use dbSNP (JSON):
-
+**Use dbSNP (JSON):**
+```bash
 python -m xplorebd gene variants TP53 --source dbsnp
+```
 
-
-dbSNP with table:
-
+**dbSNP with table:**
+```bash
 python -m xplorebd gene variants TP53 --source dbsnp --table
+```
 
-
-Another gene (ClinVar JSON):
-
+**Another gene (ClinVar JSON):**
+```bash
 python -m xplorebd gene variants BRCA1
+```
 
-
-Another gene (dbSNP + table):
-
+**Another gene (dbSNP + table):**
+```bash
 python -m xplorebd gene variants BRCA1 --source dbsnp --table
+```
 
-⚖️ Gene Regulation
+---
 
-Input can be a gene name or a genomic region.
+## ⚖️ Gene Regulation
 
-Gene name examples:
+Input can be a **gene name** or a **genomic region**.
 
+**Gene name examples:**
+```bash
 python -m xplorebd gene regulation TP53 --min 1
 python -m xplorebd gene regulation MYC --min 5
 python -m xplorebd gene regulation BRCA1 --min 3
+```
 
-
-Region examples:
-
+**Region examples:**
+```bash
 python -m xplorebd gene regulation chr17:7661779-7687550 --min 1
 python -m xplorebd gene regulation chr8:127735434-127742951 --min 3
+```
 
-
-Sources:
-ENCODE (default):
+**Sources:**
+- ENCODE (default):
+```bash
 python -m xplorebd gene regulation TP53 --source encode --min 3
+```
 
-
-JASPAR (motifs):
+- JASPAR (motifs):
+```bash
 python -m xplorebd gene regulation TP53 --source jaspar --min 5
+```
 
-
-Organism:
-
+**Organism:**
+```bash
 python -m xplorebd gene regulation TP53 --organism "Mus musculus" --min 2
 python -m xplorebd gene regulation TP53 --organism "Rattus norvegicus" --min 2
+```
 
-Min results (1–20):
+**Min results (1–20):**
+```bash
 python -m xplorebd gene regulation TP53 --min 10
+```
 
-🧾 Gene–Disease Associations
+---
+
+## 🧾 Gene–Disease Associations
+
+```bash
 python -m xplorebd gene diseases TP53 --source gwas --min 5
 python -m xplorebd gene diseases BRCA1 --source disgenet --min 5
 python -m xplorebd gene diseases BRCA1 --source omim
+```
 
-🔌 MCP Server
+---
+
+## 🔌 MCP Server
+
 Run the MCP server for integration with MCP-compatible clients:
+
+```bash
 python xplorebd/mcp_server.py --serve
+```
 
+`manifest.json` defines one tool:
 
-manifest.json defines one tool:
-literature → search publications across PubMed, bioRxiv, medRxiv, ORCID.
+- **literature** → search publications across PubMed, bioRxiv, medRxiv, ORCID.
+
 Example MCP client config:
 
+```json
 {
   "mcpServers": {
     "xplorebd": {
@@ -158,8 +207,13 @@ Example MCP client config:
     }
   }
 }
+```
 
-🐍 Python API
+---
+
+## 🐍 Python API
+
+```python
 from xplorebd.bridge import GeneBridge, LiteratureBridge
 
 # Gene annotation
@@ -169,14 +223,26 @@ annotation = gbridge.get_annotation("BRCA1")
 # Literature search
 lbridge = LiteratureBridge()
 papers = lbridge.literature_search(keyword="CRISPR", max_results=3)
+```
 
-⚙️ Configuration
-Some APIs require authentication tokens.
+---
+
+## ⚙️ Configuration
+
+Some APIs require authentication tokens.  
+
 Set them as environment variables:
+
+```bash
 export DISGENET_API_KEY="your_disgenet_key"
 export OMIM_API_KEY="your_omim_key"
+```
 
-📂 Project Structure
+---
+
+## 📂 Project Structure
+
+```
 Xplore-BD/
 ├── LICENSE              # MIT License
 ├── README.md            # Documentation
@@ -193,16 +259,25 @@ Xplore-BD/
 │   ├── main.py
 │   └── mcp_server.py
 └── tests/               # Unit tests
+```
 
-📜 License
-This project is licensed under the MIT License – see the LICENSE
- file.
+---
 
-👤 Author
-Shrihari Kamalan Kumaraguruparan
-📧 kkshrihari@gmail.com
+## 📜 License
 
-🔗 Project Links
-📄 Homepage
-📦 Repository
-🐛 Issues
+This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file.
+
+---
+
+## 👤 Author
+
+- **Shrihari Kamalan Kumaraguruparan**  
+  📧 kkshrihari@gmail.com  
+
+---
+
+## 🔗 Project Links
+
+- 📄 [Homepage](https://github.com/kkShrihari/Xplore-BD)  
+- 📦 [Repository](https://github.com/kkShrihari/Xplore-BD)  
+- 🐛 [Issues](https://github.com/kkShrihari/Xplore-BD/issues)  
