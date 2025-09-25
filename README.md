@@ -1,173 +1,208 @@
-# Explore_Biological_Databases
+# XploreBD – Explore Biological Databases
 
-XploreBD is an MCP-compatible extension that provides access to biological data through standardized tools. It integrates APIs such as Ensembl, NCBI, GEO, and ClinVar to enable gene annotation, variant analysis, gene–disease associations, RNA expression queries, and more—making it easy for LLMs to explore biomedical information in a structured and reproducible way.
+**XploreBD** is an **MCP-compatible server** that integrates diverse biological data sources into a unified exploration hub.  
+Instead of navigating multiple specialized resources (UniProt, GenBank, Ensembl, KEGG, STRING, etc.), XploreBD provides a central interface to query **genes, RNAs, proteins, pathways, and interactions** seamlessly.
 
-## Installation
+By wrapping existing APIs into capability-based tools (e.g., `gene annotate`, `gene variants`, `gene regulation`, `gene diseases`, `literature`), XploreBD simplifies access, ensures consistent input/output formats, and provides a flexible foundation for downstream **bioinformatics, epigenetics, multi-omics research, and machine learning workflows**.
 
-Install the package in development mode:
+---
 
-```bash
+## ✨ Features
+
+- 🔎 **Literature search** → PubMed, bioRxiv, medRxiv, ORCID  
+- 🧬 **Gene queries**:  
+  - Annotation (Ensembl, NCBI)  
+  - Expression (GTEx, ENA)  
+  - Variants (ClinVar, dbSNP)  
+  - Regulation (ENCODE, JASPAR)  
+  - Disease associations (GWAS, OMIM, DisGeNET, PubMed)  
+- ⚡ **MCP integration** → works as an MCP server for LLMs  
+- 🖥 **CLI tool** → rich command-line interface  
+- 📦 **Python API** → bridges available for programmatic use  
+
+---
+
+## 📦 Installation
+
+Create and activate an environment (example with Python 3.11):
+
+bash
+```
+sudo apt update
+sudo apt install python3.11 python3.11-venv python3.11-dev
+
+python3.11 -m venv Xplore-env
+source Xplore-env/bin/activate
+pip install --upgrade pip
+```
+Install dependencies:
+```
 pip install -e .
+pip install -r requirements.txt
 ```
 
 Or install from PyPI (when available):
-
-```bash
-pip install Xplore-BD
 ```
-
-## Usage
-
-
-### Command Line Interface
-
-The package provides a `Xplore-BD` command for usage:
-
-```bash
-# Get help
-Xplore-BD --help
-
-# Run your main functionality
-Xplore-BD <args>
+pip install xplorebd
 ```
+🚀 Usage
+CLI Help
+python -m xplorebd --help
+
+📚 Literature
+
+Search publications across PubMed, bioRxiv, medRxiv, ORCID:
+
+python -m xplorebd literature -k "CRISPR gene editing" -c 5
+
+🧬 Gene Annotation
+python -m xplorebd gene annotate BRCA1 --source ensembl
+
+📊 Gene Expression
+python -m xplorebd gene expression TP53 --organism human
+
+🧬 Gene Variants
+
+Default usage (ClinVar JSON):
+
+python -m xplorebd gene variants TP53
 
 
+ClinVar as table:
 
-### MCP Server
-
-The package provides an MCP server for integration with MCP-compatible clients:
-
-```bash
-# Run the MCP server
-Xplore-BD-server
-```
-
-The MCP server provides the following tools:
-
-- **tool1**: Description of tool1
-- **tool2**: Description of tool2
-- **tool3**: Description of tool3
+python -m xplorebd gene variants TP53 --table
 
 
-### Python API
+Explicit ClinVar JSON:
 
-```python
-from Xplore-BD.main import Explore_Biological_DatabasesBridge
-
-# Initialize the bridge
-bridge = Explore_Biological_DatabasesBridge()
-
-# Use your functionality
-result = bridge.your_method()
-```
-
-## Features
-
-- **Feature 1**: Description of feature 1
-- **Feature 2**: Description of feature 2
-- **Feature 3**: Description of feature 3
-
-- **MCP Integration**: Full Model Context Protocol server implementation
+python -m xplorebd gene variants TP53 --source clinvar
 
 
-## API Methods
+Explicit ClinVar table:
 
-### Core Methods
-
-- `method1()`: Description of method1
-- `method2()`: Description of method2
-- `method3()`: Description of method3
-
-### Configuration
-
-The package uses a configuration class for settings:
-
-```python
-from Xplore-BD.main import Explore_Biological_DatabasesConfig, Explore_Biological_DatabasesBridge
-
-config = Explore_Biological_DatabasesConfig(
-    base_url="https://api.example.com",
-    api_key="your_api_key",
-    timeout=30.0
-)
-
-bridge = Explore_Biological_DatabasesBridge(config)
-```
+python -m xplorebd gene variants TP53 --source clinvar --table
 
 
-## MCP Server Configuration
+Use dbSNP (JSON):
 
-To use the MCP server with an MCP client, configure it as follows:
+python -m xplorebd gene variants TP53 --source dbsnp
 
-```json
+
+dbSNP with table:
+
+python -m xplorebd gene variants TP53 --source dbsnp --table
+
+
+Another gene (ClinVar JSON):
+
+python -m xplorebd gene variants BRCA1
+
+
+Another gene (dbSNP + table):
+
+python -m xplorebd gene variants BRCA1 --source dbsnp --table
+
+⚖️ Gene Regulation
+
+Input can be a gene name or a genomic region.
+
+Gene name examples:
+
+python -m xplorebd gene regulation TP53 --min 1
+python -m xplorebd gene regulation MYC --min 5
+python -m xplorebd gene regulation BRCA1 --min 3
+
+
+Region examples:
+
+python -m xplorebd gene regulation chr17:7661779-7687550 --min 1
+python -m xplorebd gene regulation chr8:127735434-127742951 --min 3
+
+
+Sources:
+ENCODE (default):
+python -m xplorebd gene regulation TP53 --source encode --min 3
+
+
+JASPAR (motifs):
+python -m xplorebd gene regulation TP53 --source jaspar --min 5
+
+
+Organism:
+
+python -m xplorebd gene regulation TP53 --organism "Mus musculus" --min 2
+python -m xplorebd gene regulation TP53 --organism "Rattus norvegicus" --min 2
+
+Min results (1–20):
+python -m xplorebd gene regulation TP53 --min 10
+
+🧾 Gene–Disease Associations
+python -m xplorebd gene diseases TP53 --source gwas --min 5
+python -m xplorebd gene diseases BRCA1 --source disgenet --min 5
+python -m xplorebd gene diseases BRCA1 --source omim
+
+🔌 MCP Server
+Run the MCP server for integration with MCP-compatible clients:
+python xplorebd/mcp_server.py --serve
+
+
+manifest.json defines one tool:
+literature → search publications across PubMed, bioRxiv, medRxiv, ORCID.
+Example MCP client config:
+
 {
   "mcpServers": {
-    "Xplore-BD": {
-      "command": "Xplore-BD-server",
-      "env": {}
+    "xplorebd": {
+      "command": "python",
+      "args": ["xplorebd/mcp_server.py", "--serve"]
     }
   }
 }
-```
 
-The server will automatically handle:
-- JSON-RPC communication
-- Tool discovery and invocation
-- Error handling and reporting
+🐍 Python API
+from xplorebd.bridge import GeneBridge, LiteratureBridge
 
+# Gene annotation
+gbridge = GeneBridge()
+annotation = gbridge.get_annotation("BRCA1")
 
-## Development
+# Literature search
+lbridge = LiteratureBridge()
+papers = lbridge.literature_search(keyword="CRISPR", max_results=3)
 
-### Setup Development Environment
+⚙️ Configuration
+Some APIs require authentication tokens.
+Set them as environment variables:
+export DISGENET_API_KEY="your_disgenet_key"
+export OMIM_API_KEY="your_omim_key"
 
-```bash
-# Install in development mode with dev dependencies
-pip install -e .[dev]
-
-# Run tests
-pytest
-
-# Format code
-black Xplore-BD/
-
-# Type checking
-mypy Xplore-BD/
-```
-
-### Project Structure
-
-```
+📂 Project Structure
 Xplore-BD/
-├── pyproject.toml      # Package configuration
-├── README.md          # This file
-├── LICENSE            # MIT License
-├── Xplore-BD/         # Main package
-│   ├── __init__.py    # Package initialization
-│   ├── main.py        # Core functionality
+├── LICENSE              # MIT License
+├── README.md            # Documentation
+├── manifest.json        # MCP manifest
+├── pyproject.toml       # Build system + metadata
+├── requirements.txt     # Dependencies
+├── xplorebd/            # Main package
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── bridge.py
+│   ├── cli.py
+│   ├── gene.py
+│   ├── literature.py
+│   ├── main.py
+│   └── mcp_server.py
+└── tests/               # Unit tests
 
-│   └── cli.py         # Command-line interface
+📜 License
+This project is licensed under the MIT License – see the LICENSE
+ file.
 
+👤 Author
+Shrihari Kamalan Kumaraguruparan
+📧 kkshrihari@gmail.com
 
-│   └── mcp_server.py  # MCP server implementation
-
-└── tests/             # Test files
-    ├── __init__.py
-    └── test_main.py   # Tests for main functionality
-```
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Run the test suite
-6. Submit a pull request
-
-## Support
-
-For issues and questions, please use the GitHub issue tracker. 
+🔗 Project Links
+📄 Homepage
+📦 Repository
+🐛 Issues
