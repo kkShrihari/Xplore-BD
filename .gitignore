@@ -148,3 +148,4 @@ celerybeat.pid
 # Cython debug symbols
 cython_debug/ xplorebd/vendor_linux/
 xplorebd/mcp/
+vendor_linux/
