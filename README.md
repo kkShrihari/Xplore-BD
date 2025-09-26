@@ -202,7 +202,7 @@ Example MCP client config:
 {
   "mcpServers": {
     "xplorebd": {
-      "command": "python",
+      "command": "/{path}/Xplore-BD/Xplore-env-py311/bin/python",
       "args": ["xplorebd/mcp_server.py", "--serve"]
     }
   }
