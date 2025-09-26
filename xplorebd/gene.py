@@ -4,6 +4,7 @@ gene.py — Unified gene information bridge across NCBI, Ensembl, GTEx, ENCODE, 
 
 import os
 import requests
+import pandas as pd
 from dataclasses import dataclass
 import xml.etree.ElementTree as ET
 from typing import List, Any, Dict, Optional
@@ -103,7 +104,7 @@ class GeneBridge:
         else:
             raise ValueError("Unsupported source")
 
-    import pandas as pd
+    
     # ---------- Gene Expression ----------
     def get_expression(self, gene: str, organism: str = "Homo sapiens") -> Dict[str, Any]:
         import pandas as pd
