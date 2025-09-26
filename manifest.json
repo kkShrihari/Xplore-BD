@@ -1,0 +1,55 @@
+{
+  "dxt_version": "0.1",
+  "name": "xplorebd",
+  "version": "0.1.0",
+  "description": "Search biomedical literature and gene data (annotation, expression, variants, regulation, diseases) via PubMed, ORCID, Ensembl, ClinVar, and more.",
+  "author": {
+    "name": "Shrihari Kamalan Kumaraguruparan",
+    "email": "kkshrihari@gmail.com"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "xplorebd/mcp_server.py",
+    "mcp_config": {
+      "command": "py",
+      "args": [
+        "-3.11",
+        "${__dirname}/xplorebd/mcp_server.py",
+        "--serve"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "literature",
+      "description": "Search biomedical literature across PubMed, bioRxiv, medRxiv, and ORCID (by keyword or researcher)."
+    },
+    {
+      "name": "gene",
+      "description": "Unified gene exploration tool. Supports annotation (Ensembl/NCBI), expression (GTEx, ENA), variants (ClinVar/dbSNP), regulation (ENCODE/JASPAR), and diseases (GWAS, DisGeNET, OMIM, PubMed)."
+    },
+    {
+      "name": "ping",
+      "description": "Simple health-check tool."
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "biology",
+    "genomics",
+    "genetics",
+    "literature",
+    "pubmed",
+    "orcid",
+    "ensembl",
+    "clinvar",
+    "gwas",
+    "bioinformatics",
+    "GTEx",
+    "encode",
+    "jaspar",
+    "disgenet",
+    "omim",
+    "MCP"
+  ]
+}
