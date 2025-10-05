@@ -67,7 +67,15 @@ class GeneBridge:
             raise ValueError(f"Could not resolve {gene} to Entrez Gene ID")
         return ids[0]
 
-    # ---------- Gene Annotation ----------
+    def _clean_dict(self, d):
+        """Recursively remove keys with empty values."""
+        if isinstance(d, dict):
+            return {k: self._clean_dict(v) for k, v in d.items() if v not in ("", None, [], {})}
+        elif isinstance(d, list):
+            return [self._clean_dict(x) for x in d if x not in ("", None, [], {})]
+        else:
+            return d
+
     def get_annotation(self, gene: str, source: str = "ensembl") -> Dict[str, Any]:
         """Fetch gene annotation, function, GO terms, orthologs."""
         if source == "ensembl":
@@ -78,7 +86,8 @@ class GeneBridge:
             params = {"expand": "0"}
             r = self.session.get(url, params=params, timeout=self.config.timeout)
             r.raise_for_status()
-            return r.json()
+            return self._clean_dict(r.json())   # 🟢 cleaned here
+
         elif source == "ncbi":
             entrez_id = self._resolve_entrez_id(gene)
             url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
@@ -100,66 +109,86 @@ class GeneBridge:
                     break
 
             record.pop("locationhist", None)
-            return record
+            return self._clean_dict(record)   
+
         else:
             raise ValueError("Unsupported source")
-
-    
+        
     # ---------- Gene Expression ----------
-    def get_expression(self, gene: str, organism: str = "Homo sapiens") -> Dict[str, Any]:
+    def get_expression(self, gene: str, organism: str = "Homo sapiens", gse_id: str = "GSE62944") -> Dict[str, Any]:
+        """
+        Fetch expression for a gene (symbol or Ensembl ID) from GEO.
+        Default dataset: GSE62944 (TCGA RNA-seq gene expression).
+        """
+        import os
         import pandas as pd
+        import urllib.request
 
-        ens_id = self._resolve_symbol(gene, organism)
-        if not ens_id:
-            raise ValueError(f"Could not resolve {gene} to Ensembl ID")
+        cache_dir = os.path.expanduser("~/.xplorebd/geo_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # --- Normalize gene input ---
+        if gene.startswith("ENSG"):
+            ens_id_base = gene.split(".")[0]
+        else:
+            ens_id_base = gene  # often GEO uses symbols
 
         result = {
-            "ensembl_id": ens_id,
+            "ensembl_id": ens_id_base,
             "symbol": gene,
             "organism": organism,
-            "expression": [],
-            "count_matrix": "https://gtexportal.org/home/datasets",
-            "fastq_links": []
+            "count_matrix": f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={gse_id}",
+            "fastq_links": [],  # GEO rarely gives direct FASTQ
         }
 
-        # ---------- Step 1: Try GTEx API ----------
-        url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+        # --- Step 1: Download GEO supplementary matrix ---
         try:
-            params = {"gencodeId": ens_id, "datasetId": "gtex_v8"}
-            r = self.session.get(url, params=params, timeout=self.config.timeout)
-            r.raise_for_status()
-            data = r.json()
-            expr_data = data.get("medianGeneExpression", [])
-        except Exception:
+            matrix_url = f"https://ftp.ncbi.nlm.nih.gov/geo/series/{gse_id[:-3]}nnn/{gse_id}/suppl/{gse_id}_01_Expression_Matrix.txt.gz"
+            local_matrix = os.path.join(cache_dir, f"{gse_id}_matrix.txt.gz")
+
+            if not os.path.exists(local_matrix):
+                print(f"Downloading expression matrix from {matrix_url} ...")
+                urllib.request.urlretrieve(matrix_url, local_matrix)
+
+            # --- Step 2: Load matrix in chunks (large file) ---
             expr_data = []
+            chunk_iter = pd.read_csv(local_matrix, sep="\t", compression="gzip", chunksize=5000, index_col=0)
 
-        # ---------- Step 2: Fallback to GCT file ----------
-        if not expr_data:
-            try:
-                gct_url = "https://storage.googleapis.com/gtex_analysis_v8/rna_seq_data/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct.gz"
-                df = pd.read_csv(gct_url, sep="\t", skiprows=2)
-                row = df[(df["Description"] == gene) | (df["Name"].str.split(".").str[0] == ens_id)]
-                if not row.empty:
-                    row = row.iloc[0]
+            for chunk in chunk_iter:
+                chunk.index = chunk.index.astype(str)
+                if gene in chunk.index:
+                    row = chunk.loc[gene]
                     expr_data = [
-                        {"tissue": col, "value": float(row[col]), "unit": "TPM"}
-                        for col in df.columns[2:]
+                        {"sample": col, "value": float(val), "unit": "FPKM/TPM"}
+                        for col, val in row.items()
+                        if pd.notnull(val)
                     ]
-            except Exception as e:
-                print(f"Warning: Could not fetch GTEx matrix fallback ({e})")
+                    break
+                else:
+                    matches = chunk.index[chunk.index.str.startswith(ens_id_base)]
+                    if len(matches):
+                        row = chunk.loc[matches[0]]
+                        expr_data = [
+                            {"sample": col, "value": float(val), "unit": "FPKM/TPM"}
+                            for col, val in row.items()
+                            if pd.notnull(val)
+                        ]
+                        break
 
-        # ---------- Step 3: Save expression ----------
-        if expr_data:
-            result["expression"] = expr_data
-        else:
-            print(f"Warning: No expression data found for {gene}")
+            if expr_data:
+                result["expression"] = expr_data
+            else:
+                print(f"⚠️ No expression values found for {gene} in {gse_id}")
 
-        # ---------- Step 4: Add FASTQ links (ENA) ----------
+        except Exception as e:
+            print(f"Warning: Could not fetch GEO expression matrix ({e})")
+
+        # --- Step 3: (Optional) FASTQ links from ENA ---
         try:
             ena_url = "https://www.ebi.ac.uk/ena/portal/api/search"
             ena_params = {
                 "result": "read_run",
-                "query": "study_accession=PRJNA758389",
+                "query": f"study_accession={gse_id}",
                 "fields": "run_accession,fastq_ftp",
                 "format": "json"
             }
@@ -175,6 +204,90 @@ class GeneBridge:
         return result
 
 
+    # # ---------- Gene Expression ----------
+    # def get_expression(self, gene: str, organism: str = "Homo sapiens") -> Dict[str, Any]:
+    #     """
+    #     Fetch expression for a gene (symbol or Ensembl ID).
+    #     Returns GTEx expression image links (no local downloads).
+    #     """
+    #     import os
+    #     import pandas as pd
+    #     import urllib.request
+
+    #     # --- Step A: Normalize gene input ---
+    #     if gene.startswith("ENSG"):
+    #         ens_id_base = gene.split(".")[0]  # strip version if present
+    #     else:
+    #         ens_id_base = self._resolve_symbol(gene, organism)
+
+    #     if not ens_id_base:
+    #         raise ValueError(f"Could not resolve {gene} to Ensembl ID")
+
+    #     # Try with and without version suffix for GTEx API
+    #     possible_ids = [ens_id_base, ens_id_base + ".15", ens_id_base + ".17"]
+
+    #     result = {
+    #         "ensembl_id": ens_id_base,
+    #         "symbol": gene,
+    #         "organism": organism,
+    #         "count_matrix": (
+    #             "https://gtexportal.org/home/downloads/adult-gtex/bulk_tissue_expression"
+    #         ),
+    #         "fastq_links": [],
+    #         "expression_images": {
+    #             "bulk_tissue": f"https://gtexportal.org/home/gene/{ens_id_base}#geneExpression",
+    #             "single_tissue": f"https://gtexportal.org/home/gene/{ens_id_base}#geneExpression",
+    #             "exon_expression": f"https://gtexportal.org/home/gene/{ens_id_base}#geneExpression"
+    #         }
+    #     }
+
+    #     # ---------- Step 1: Try GTEx API ----------
+    #     expr_data = []
+    #     url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+    #     for gid in possible_ids:
+    #         try:
+    #             params = {"gencodeId": gid, "datasetId": "gtex_v8"}
+    #             r = self.session.get(url, params=params, timeout=self.config.timeout)
+    #             if r.ok:
+    #                 data = r.json()
+    #                 expr_data = [
+    #                     {
+    #                         "tissue": item["tissueSiteDetailId"],
+    #                         "value": float(item["median"]),
+    #                         "unit": item.get("unit", "TPM")
+    #                     }
+    #                     for item in data.get("medianGeneExpression", [])
+    #                 ]
+    #                 if expr_data:
+    #                     break
+    #         except Exception as e:
+    #             print(f"Warning: GTEx API fetch failed for {gid} ({e})")
+
+    #     # ---------- Step 2: Add expression only if available ----------
+    #     if expr_data:
+    #         result["expression"] = expr_data
+    #     else:
+    #         print(f"Warning: No expression data found for {gene}")
+
+    #     # ---------- Step 3: Add FASTQ links (ENA) ----------
+    #     try:
+    #         ena_url = "https://www.ebi.ac.uk/ena/portal/api/search"
+    #         ena_params = {
+    #             "result": "read_run",
+    #             "query": "study_accession=PRJNA758389",
+    #             "fields": "run_accession,fastq_ftp",
+    #             "format": "json"
+    #         }
+    #         ena_r = self.session.get(ena_url, params=ena_params, timeout=self.config.timeout)
+    #         if ena_r.ok:
+    #             runs = ena_r.json()
+    #             result["fastq_links"] = [
+    #                 f["fastq_ftp"] for f in runs if "fastq_ftp" in f
+    #             ][:5]
+    #     except Exception as e:
+    #         print(f"Warning: Could not fetch FASTQ links ({e})")
+
+    #     return result
 
     # ---------- Gene Variants ----------
     def get_variants(
