@@ -6,7 +6,7 @@ import argparse
 import sys
 import json
 from typing import Optional
-
+from .protein import ProteinBridge
 from .bridge import LiteratureBridge, GeneBridge, Config
 
 
@@ -143,6 +143,68 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
 
+   # ---------- Protein Annotation ----------
+   p_annot_parser = subparsers.add_parser(
+       "p_annotation",
+       help="Fetch protein functional annotation from UniProt (default) or NCBI"
+   )
+   p_annot_parser.add_argument(
+       "protein_id",
+       help="Protein accession or name (e.g., P04637, TP53, NP_000537)"
+   )
+   p_annot_parser.add_argument(
+       "--source",
+       choices=["uniprot", "ncbi"],
+       default="uniprot",
+       help="Annotation source (default: uniprot)"
+   )
+   p_annot_parser.add_argument(
+       "--organism",
+       type=str,
+       default="Homo sapiens",
+       help="Organism to query (default: Homo sapiens)"
+   )
+   p_annot_parser.add_argument(
+       "--reviewed",
+       choices=["yes", "no"],
+       default="no",
+       help="Restrict to reviewed entries if source=uniprot (default: no)"
+   )
+
+   # ---------- Protein Expression (Human Protein Atlas only) ----------
+   pexpr_parser = subparsers.add_parser(
+       "p_expression",
+       help="Fetch protein expression data from the Human Protein Atlas (human only)"
+   )
+   pexpr_parser.add_argument(
+       "protein_id",
+       help="Protein or gene name (e.g., TP53, BRCA1)"
+   )
+
+   # ---------- Protein Structure (PDB + AlphaFold) ----------
+   pstruct_parser = subparsers.add_parser(
+       "p_structure",
+       aliases=["protein_structure"],
+       help="Fetch 3D, homology, and AlphaFold models for a protein name, UniProt ID, or raw sequence"
+   )
+   pstruct_parser.add_argument(
+       "protein_input",
+       help="Protein name, UniProt ID, or raw amino acid sequence (≥30 aa)"
+   )
+   pstruct_parser.add_argument(
+       "--source",
+       choices=["both"],
+       default="both",
+       help="Select structure source:  both (default: both)"
+   )
+   pstruct_parser.add_argument(
+       "--organism",
+       type=str,
+       default="Homo sapiens",
+       help="Organism to query (default: Homo sapiens)"
+   )
+
+
    return parser
 
 
@@ -265,7 +327,69 @@ def main(args: Optional[list] = None) -> int:
             print(f"Unknown command: {parsed_args.command}")
             return 1
 
-      return 0
+      # ---------- Protein Annotation ----------
+      elif parsed_args.command == "p_annotation":
+         pbridge = ProteinBridge()
+         res = pbridge.get_protein_annotation(
+            protein_id=parsed_args.protein_id
+         )
+         print(json.dumps(res, indent=2, ensure_ascii=False))
+         return 0
+
+      # ---------- Protein Expression ----------
+      elif parsed_args.command == "p_expression":
+         pbridge = ProteinBridge()
+         res = pbridge.get_expression_only(
+            protein_name=parsed_args.protein_id
+         )
+         print(json.dumps(res, indent=2, ensure_ascii=False))
+         return 0
+
+      # ---------- Protein Structure ----------
+      elif parsed_args.command in ["p_structure", "protein_structure"]:
+         pbridge = ProteinBridge()
+         user_input = parsed_args.protein_input.strip()
+
+         try:
+            res = pbridge.get_protein_structure(user_input)
+            res["organism"] = parsed_args.organism
+
+            # --- Filter by selected source ---
+            src = parsed_args.source.lower()
+
+            if src == "alphafold":
+                # Show only AlphaFold2 model
+                res["structures"] = {
+                    "AlphaFold_model": res["structures"].get("AlphaFold_model")
+                }
+
+            elif src == "pdb":
+                # Show only experimental and homology structures
+                res["structures"] = {
+                    "3D_structure": res["structures"].get("3D_structure"),
+                    "homology_model": res["structures"].get("homology_model")
+                }
+
+            elif src == "both":
+                # Ensure AlphaFold is included if available
+                alpha = res["structures"].get("AlphaFold_model")
+                pdb = res["structures"].get("3D_structure")
+                homo = res["structures"].get("homology_model")
+                res["structures"] = {}
+                if alpha:
+                    res["structures"]["AlphaFold_model"] = alpha
+                if pdb:
+                    res["structures"]["3D_structure"] = pdb
+                if homo:
+                    res["structures"]["homology_model"] = homo
+
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+
+         except Exception as e:
+            print(f"Error fetching protein structure: {e}", file=sys.stderr)
+            return 1
+
 
    except Exception as e:
       print(f"Error: {e}", file=sys.stderr)
