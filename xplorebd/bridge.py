@@ -49,7 +49,6 @@ class Bridge:
         return self._gene.get_disease_associations(gene_name, source=source, min_results=min_results, organism=organism)
 
     # --- Protein ---
-        # --- Protein ---
     def protein_annotation(self, protein_id: str):
         """Fetch protein annotation (function, domains, sequence features)."""
         return get_protein_annotation(protein_id)
