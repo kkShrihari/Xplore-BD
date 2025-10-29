@@ -204,6 +204,24 @@ def create_parser() -> argparse.ArgumentParser:
        help="Organism to query (default: Homo sapiens)"
    )
 
+    # ---------- Protein–Disease Associations (UniProt + DisGeNET + ClinVar + OMIM) ----------
+   pdisease_parser = subparsers.add_parser(
+        "p_disease",
+        aliases=["protein_disease"],
+        help="Fetch disease associations for a given protein or gene from UniProt, DisGeNET, ClinVar, and OMIM."
+   )
+
+   pdisease_parser.add_argument(
+        "protein_input",
+        help="Protein name, gene symbol, or UniProt ID (e.g., TP53, BRCA1, or P04637)."
+   )
+
+   pdisease_parser.add_argument(
+        "--organism",
+        type=str,
+        default="human",
+        help="Organism to query (default: human; options: human, mouse, rat, zebrafish)."
+   )
 
    return parser
 
@@ -390,6 +408,25 @@ def main(args: Optional[list] = None) -> int:
             print(f"Error fetching protein structure: {e}", file=sys.stderr)
             return 1
 
+      # ---------- Protein–Disease Associations ----------
+      elif parsed_args.command in ["p_disease", "protein_disease"]:
+         pbridge = ProteinBridge()
+         user_input = parsed_args.protein_input.strip()
+
+         try:
+            # --- Fetch disease associations from all databases automatically ---
+            res = pbridge.get_protein_diseases(
+                protein_input=user_input,
+                organism=parsed_args.organism.lower()
+            )
+
+            # --- Print formatted JSON output ---
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return 0
+
+         except Exception as e:
+            print(f"Error fetching protein disease associations: {e}", file=sys.stderr)
+            return 1
 
    except Exception as e:
       print(f"Error: {e}", file=sys.stderr)
