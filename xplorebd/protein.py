@@ -351,3 +351,203 @@ class ProteinBridge:
             out["structures"]["homology_model"] = {"entries": []}
 
         return out
+
+    # ---------- Protein–Disease Associations ----------
+    def get_protein_diseases(self, protein_input: str, organism: str = "human") -> dict:
+        """
+        Fetch disease associations for a given protein/gene name or UniProt ID.
+
+        Automatically queries:
+          - UniProt (curated diseases + literature)
+          - DisGeNET (gene–disease associations + scores)
+          - ClinVar (variants + clinical significance)
+          - OMIM (disease summaries + inheritance info)
+
+        Default organism: Homo sapiens (taxid:9606)
+
+        Output sections:
+        - associated_diseases
+        - literature
+        - clinical_relevance
+        """
+
+        import re, requests, urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        s = requests.Session()
+        s.headers.update({"User-Agent": "XploreBioDB/1.0", "Accept": "application/json"})
+
+        # ---------------- Organism map ---------------- #
+        org_map = {
+            "human": "9606",
+            "mouse": "10090",
+            "rat": "10116",
+            "zebrafish": "7955"
+        }
+        org_id = org_map.get(organism.lower(), "9606")
+
+        # ---------------- Resolve UniProt ID ---------------- #
+        def _resolve_to_uniprot(query: str):
+            query = query.strip()
+            if re.match(r"^[A-Z0-9]{6,10}$", query):
+                return query, "Unknown organism"
+
+            url = "https://rest.uniprot.org/uniprotkb/search"
+            variants = [
+                f"(gene_exact:{query} OR protein_name:{query}) AND reviewed:true AND organism_id:{org_id}",
+                f"(gene:{query} OR protein_name:{query}) AND reviewed:true",
+                f"gene:{query}"
+            ]
+            for v in variants:
+                try:
+                    r = s.get(url, params={
+                        "query": v,
+                        "fields": "accession,organism_name",
+                        "format": "json",
+                        "size": 1,
+                    }, timeout=15, verify=False)
+                    if r.ok and r.json().get("results"):
+                        res = r.json()["results"][0]
+                        return (
+                            res.get("primaryAccession"),
+                            res.get("organism", {}).get("scientificName", "Unknown organism"),
+                        )
+                except Exception:
+                    continue
+            return None, None
+
+        # ---------------- UniProt ---------------- #
+        def _get_uniprot(uid: str):
+            url = f"https://rest.uniprot.org/uniprotkb/{uid}.json"
+            out = {"associated_diseases": [], "literature": [], "clinical_relevance": []}
+            try:
+                r = s.get(url, timeout=20, verify=False)
+                if not r.ok:
+                    return out
+                data = r.json()
+
+                # Diseases
+                for c in data.get("comments", []):
+                    if c.get("commentType") == "DISEASE":
+                        d = c.get("disease", {})
+                        out["associated_diseases"].append({
+                            "disease_name": d.get("diseaseId"),
+                            "description": d.get("diseaseDescription"),
+                            "acronym": d.get("acronym"),
+                            "cross_ref": d.get("diseaseCrossReference", {}),
+                            "source_url": f"https://www.uniprot.org/uniprotkb/{uid}"
+                        })
+
+                # Literature
+                for ref in data.get("references", []):
+                    citation = ref.get("citation", {})
+                    if citation:
+                        pubmed = [x["id"] for x in citation.get("citationCrossReferences", [])
+                                  if x.get("database") == "PubMed"]
+                        out["literature"].append({
+                            "title": citation.get("title"),
+                            "journal": citation.get("journal"),
+                            "pubmed_ids": pubmed,
+                            "year": citation.get("publicationDate")
+                        })
+
+                # Variants (clinical relevance)
+                for f in data.get("features", []):
+                    if f.get("type") == "VARIANT":
+                        out["clinical_relevance"].append({
+                            "variant": f.get("description"),
+                            "disease": f.get("disease"),
+                            "evidence": f.get("evidences", []),
+                        })
+
+                return {k: v[:5] for k, v in out.items()}
+            except Exception:
+                return out
+
+        # ---------------- DisGeNET ---------------- #
+        def _get_disgenet(gene: str):
+            url = f"https://www.disgenet.org/api/gda/gene/{gene}"
+            out = {"associated_diseases": [], "literature": [], "clinical_relevance": []}
+            try:
+                r = s.get(url, timeout=20, verify=False)
+                if not r.ok:
+                    return out
+                for item in r.json()[:5]:
+                    out["associated_diseases"].append({
+                        "disease_name": item.get("disease_name"),
+                        "disease_id": item.get("diseaseid"),
+                        "score": item.get("score"),
+                        "source": item.get("source"),
+                        "source_url": f"https://www.disgenet.org/gene/{item.get('geneid')}"
+                    })
+                    if item.get("pubmedid"):
+                        out["literature"].append({"pubmed_id": item.get("pubmedid")})
+                return out
+            except Exception:
+                return out
+
+        # ---------------- ClinVar ---------------- #
+        def _get_clinvar(gene: str):
+            url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+            params = {"db": "clinvar", "term": gene, "retmode": "json", "retmax": 5}
+            out = {"associated_diseases": [], "literature": [], "clinical_relevance": []}
+            try:
+                r = s.get(url, params=params, timeout=20, verify=False)
+                if not r.ok:
+                    return out
+                ids = r.json().get("esearchresult", {}).get("idlist", [])
+                for vid in ids[:5]:
+                    out["associated_diseases"].append({
+                        "variant_id": vid,
+                        "source_url": f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{vid}"
+                    })
+                    out["clinical_relevance"].append({
+                        "variant_id": vid,
+                        "clinical_significance_url": f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{vid}"
+                    })
+                return out
+            except Exception:
+                return out
+
+        # ---------------- OMIM ---------------- #
+        def _get_omim(gene: str):
+            url = f"https://api.omim.org/api/entry/search?search={gene}&start=0&limit=5&format=json"
+            out = {"associated_diseases": [], "literature": [], "clinical_relevance": []}
+            try:
+                r = s.get(url, timeout=20, verify=False)
+                if not r.ok:
+                    return out
+                entries = r.json().get("omim", {}).get("searchResponse", {}).get("entryList", [])
+                for e in entries[:5]:
+                    entry = e.get("entry", {})
+                    out["associated_diseases"].append({
+                        "disease_name": entry.get("titles", {}).get("preferredTitle"),
+                        "mim_number": entry.get("mimNumber"),
+                        "source_url": f"https://www.omim.org/entry/{entry.get('mimNumber')}"
+                    })
+                    if entry.get("titles", {}).get("preferredTitle"):
+                        out["clinical_relevance"].append({
+                            "inheritance": entry.get("inheritance", "unknown"),
+                            "mim_number": entry.get("mimNumber")
+                        })
+                return out
+            except Exception:
+                return out
+
+        # ---------------- Resolve UniProt ---------------- #
+        uid, org = _resolve_to_uniprot(protein_input)
+        if not uid:
+            raise ValueError(f"Could not resolve '{protein_input}' for organism '{organism}' to a UniProt ID.")
+
+        # ---------------- Automatic all-source retrieval ---------------- #
+        return {
+            "input": protein_input,
+            "uniprot_id": uid,
+            "organism": org,
+            "results": {
+                "UniProt": _get_uniprot(uid),
+                "DisGeNET": _get_disgenet(protein_input),
+                "ClinVar": _get_clinvar(protein_input),
+                "OMIM": _get_omim(protein_input)
+            }
+        }
